@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Sample Pacifico Site</name>
+    <Placemark>
+      <name>Property Boundary</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -119.8000,35.0000,0
+              -119.8000,35.0100,0
+              -119.7900,35.0100,0
+              -119.7900,35.0000,0
+              -119.8000,35.0000,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+    <Placemark>
+      <name>Entry Point</name>
+      <Point>
+        <coordinates>-119.7995,35.0005,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

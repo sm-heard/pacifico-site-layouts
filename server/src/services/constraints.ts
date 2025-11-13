@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { encode as encodePng } from 'fast-png'
 import { logger } from '../lib/logger.js'
 import {
   getRunPath,
@@ -17,10 +18,14 @@ import { ASSET_CONSTRAINTS, ASSET_TYPES } from '../config/assets.js'
 const DISTANCE_MAP_FILENAME = 'distance-to-boundary.bin'
 const BASE_MASK_FILENAME = 'base-mask.bin'
 const SUMMARY_FILENAME = 'summary.json'
+const BASE_MASK_PNG = 'base-mask.png'
+const DISTANCE_MASK_PNG = 'distance-to-boundary.png'
 
 export interface ConstraintsBuildResult {
   baseMaskPath: string
   distancePath: string
+  baseMaskPngPath: string
+  distanceMaskPngPath: string
   baseFeasibleCells: number
   baseFeasibleAreaSqMeters: number
   assetMasks: Array<{
@@ -76,6 +81,7 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
 
   const baseMaskPath = join(masksDir, BASE_MASK_FILENAME)
   await writeUint8Array(baseMaskPath, baseMask)
+  await writePng(join(masksDir, BASE_MASK_PNG), grid.width, grid.height, baseMaskToPng(baseMask))
 
   const slopePercentPath = getRunPath(runId, manifest.terrain.slopePercentPath ?? 'dem/slope-percent.bin')
   const slopePercent = await readFloat32Array(slopePercentPath, totalCells)
@@ -88,6 +94,12 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
   )
   const distancePath = join(masksDir, DISTANCE_MAP_FILENAME)
   await writeFloat32Array(distancePath, distanceResult.distances)
+  await writePng(
+    join(masksDir, DISTANCE_MASK_PNG),
+    grid.width,
+    grid.height,
+    distanceToPng(distanceResult.distances, grid.width, grid.height, distanceResult.maxDistance),
+  )
 
   const assetSummaries: ConstraintsBuildResult['assetMasks'] = []
 
@@ -131,6 +143,8 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
     constraints: {
       baseMaskPath: 'masks/' + BASE_MASK_FILENAME,
       distanceMaskPath: 'masks/' + DISTANCE_MAP_FILENAME,
+      baseMaskPngPath: 'masks/' + BASE_MASK_PNG,
+      distanceMaskPngPath: 'masks/' + DISTANCE_MASK_PNG,
       baseFeasibleCells,
       assetMasks: Object.fromEntries(
         assetSummaries.map((asset) => [asset.assetId, {
@@ -156,6 +170,8 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
   return {
     baseMaskPath,
     distancePath,
+    baseMaskPngPath: join(masksDir, BASE_MASK_PNG),
+    distanceMaskPngPath: join(masksDir, DISTANCE_MASK_PNG),
     baseFeasibleCells,
     baseFeasibleAreaSqMeters,
     assetMasks: assetSummaries,
@@ -169,4 +185,41 @@ function countActive(mask: Uint8Array) {
     if (mask[i] === 1) count += 1
   }
   return count
+}
+
+function baseMaskToPng(mask: Uint8Array) {
+  const png = new Uint8Array(mask.length)
+  for (let i = 0; i < mask.length; i += 1) {
+    png[i] = mask[i] ? 255 : 0
+  }
+  return png
+}
+
+function distanceToPng(data: Float32Array, width: number, height: number, maxDistance: number) {
+  const png = new Uint8Array(width * height)
+  const scale = maxDistance > 0 ? 1 / maxDistance : 0
+  for (let i = 0; i < data.length; i += 1) {
+    const value = data[i]
+    if (!Number.isFinite(value)) {
+      png[i] = 0
+      continue
+    }
+    const normalized = Math.max(0, Math.min(1, value * scale))
+    png[i] = Math.round(normalized * 255)
+  }
+  return png
+}
+
+async function writePng(path: string, width: number, height: number, grayscale: Uint8Array) {
+  const rgba = new Uint8Array(width * height * 4)
+  for (let i = 0; i < grayscale.length; i += 1) {
+    const value = grayscale[i]
+    const offset = i * 4
+    rgba[offset] = value
+    rgba[offset + 1] = value
+    rgba[offset + 2] = value
+    rgba[offset + 3] = 255
+  }
+  const pngBuffer = encodePng({ width, height, data: rgba })
+  await writeFile(path, pngBuffer)
 }

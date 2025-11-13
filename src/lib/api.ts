@@ -102,11 +102,27 @@ const roadsSchema = z.object({
   centerlinesPath: z.string(),
 })
 
+const constraintsOverviewSchema = z.object({
+  runId: z.string(),
+  grid: z.object({
+    width: z.number(),
+    height: z.number(),
+    resolution: z.number(),
+    extentWgs84: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  }),
+  boundary: z.any().nullable(),
+  exclusions: z.array(z.any()),
+  entryPoints: z.array(z.any()),
+  baseMaskDataUrl: z.string(),
+  distanceMaskDataUrl: z.string(),
+})
+
 export type IngestResponse = z.infer<typeof ingestSchema>
 export type TerrainResponse = z.infer<typeof terrainSchema>
 export type ConstraintsResponse = z.infer<typeof constraintsSchema>
 export type LayoutResponse = z.infer<typeof layoutSchema>
 export type RoadsResponse = z.infer<typeof roadsSchema>
+export type ConstraintsOverviewResponse = z.infer<typeof constraintsOverviewSchema>
 
 async function handleResponse<T>(response: Response, schema: z.ZodSchema<T>): Promise<T> {
   if (!response.ok) {
@@ -149,6 +165,11 @@ export async function buildConstraints(runId: string): Promise<ConstraintsRespon
     body: JSON.stringify({ runId }),
   })
   return handleResponse(response, constraintsSchema)
+}
+
+export async function fetchConstraintsOverview(runId: string): Promise<ConstraintsOverviewResponse> {
+  const response = await fetch(`${baseUrl}/api/constraints/${runId}/overview`)
+  return handleResponse(response, constraintsOverviewSchema)
 }
 
 export async function placeAssets(runId: string): Promise<LayoutResponse> {

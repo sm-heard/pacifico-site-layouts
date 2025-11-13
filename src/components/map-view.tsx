@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import mapboxgl, { type Map, type Marker } from 'mapbox-gl'
-import type { FeatureCollection, LineString, Polygon } from 'geojson'
+import mapboxgl, { type Map, type Marker, type ImageSource } from 'mapbox-gl'
+import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from 'geojson'
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
 
@@ -10,6 +10,19 @@ const ROAD_SOURCE_ID = 'roads-source'
 const ROAD_LAYER_ID = 'roads-layer'
 const CORRIDOR_SOURCE_ID = 'corridors-source'
 const CORRIDOR_LAYER_ID = 'corridors-layer'
+const BASE_MASK_IMAGE_SOURCE_ID = 'base-mask-image-source'
+const BASE_MASK_LAYER_ID = 'base-mask-image-layer'
+const DISTANCE_IMAGE_SOURCE_ID = 'distance-image-source'
+const DISTANCE_LAYER_ID = 'distance-image-layer'
+const BOUNDARY_SOURCE_ID = 'boundary-source'
+const BOUNDARY_LAYER_ID = 'boundary-layer'
+const ENTRY_POINTS_SOURCE_ID = 'entry-points-source'
+const ENTRY_POINTS_LAYER_ID = 'entry-points-layer'
+
+interface RasterOverlay {
+  dataUrl: string
+  bounds: [number, number, number, number]
+}
 
 export interface MapViewProps {
   bbox?: [number, number, number, number]
@@ -17,10 +30,25 @@ export interface MapViewProps {
   roadCenterlines?: FeatureCollection<LineString>
   roadCorridors?: FeatureCollection<Polygon>
   focusPoint?: [number, number]
+  baseMaskOverlay?: RasterOverlay
+  distanceMaskOverlay?: RasterOverlay
+  boundary?: Feature<Polygon | MultiPolygon> | undefined
+  entryPoints?: FeatureCollection<Point> | undefined
   recenterToken?: number
 }
 
-export function MapView({ bbox, assets, roadCenterlines, roadCorridors, focusPoint, recenterToken = 0 }: MapViewProps) {
+export function MapView({
+  bbox,
+  assets,
+  roadCenterlines,
+  roadCorridors,
+  focusPoint,
+  baseMaskOverlay,
+  distanceMaskOverlay,
+  boundary,
+  entryPoints,
+  recenterToken = 0,
+}: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<Map | null>(null)
   const markerRef = useRef<Marker | null>(null)
@@ -144,7 +172,7 @@ export function MapView({ bbox, assets, roadCenterlines, roadCorridors, focusPoi
     const map = mapRef.current
     if (!map) return
 
-    const bounds = buildBounds({ assets, roadCorridors, bbox })
+    const bounds = buildBounds({ assets, roadCorridors, bbox, boundary })
     if (!bounds) return
 
     const applyCamera = () => {
@@ -166,10 +194,79 @@ export function MapView({ bbox, assets, roadCenterlines, roadCorridors, focusPoi
   }, [assets, roadCorridors, bbox, hasLayers, recenterToken])
 
   useEffect(() => {
-    if (focusPoint) {
-      console.debug('Map focus point', focusPoint)
+    const map = mapRef.current
+    if (!map) return
+
+    applyRasterOverlay(map, BASE_MASK_IMAGE_SOURCE_ID, BASE_MASK_LAYER_ID, baseMaskOverlay, 0.35)
+  }, [baseMaskOverlay])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    applyRasterOverlay(map, DISTANCE_IMAGE_SOURCE_ID, DISTANCE_LAYER_ID, distanceMaskOverlay, 0.45)
+  }, [distanceMaskOverlay])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (boundary) {
+      const source = map.getSource(BOUNDARY_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
+      const data = boundary as any
+      if (source) {
+        source.setData(data)
+      } else {
+        map.addSource(BOUNDARY_SOURCE_ID, {
+          type: 'geojson',
+          data,
+        })
+        map.addLayer({
+          id: BOUNDARY_LAYER_ID,
+          type: 'line',
+          source: BOUNDARY_SOURCE_ID,
+          paint: {
+            'line-color': '#fb923c',
+            'line-width': 2,
+            'line-dasharray': [1.5, 1.5],
+          },
+        })
+      }
+    } else {
+      removeLayerAndSource(map, BOUNDARY_LAYER_ID, BOUNDARY_SOURCE_ID)
     }
-  }, [focusPoint])
+  }, [boundary])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (entryPoints && entryPoints.features.length > 0) {
+      const source = map.getSource(ENTRY_POINTS_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
+      const data = entryPoints as any
+      if (source) {
+        source.setData(data)
+      } else {
+        map.addSource(ENTRY_POINTS_SOURCE_ID, {
+          type: 'geojson',
+          data,
+        })
+        map.addLayer({
+          id: ENTRY_POINTS_LAYER_ID,
+          type: 'circle',
+          source: ENTRY_POINTS_SOURCE_ID,
+          paint: {
+            'circle-radius': 5,
+            'circle-color': '#f97316',
+            'circle-stroke-color': '#fff',
+            'circle-stroke-width': 1,
+          },
+        })
+      }
+    } else {
+      removeLayerAndSource(map, ENTRY_POINTS_LAYER_ID, ENTRY_POINTS_SOURCE_ID)
+    }
+  }, [entryPoints])
 
   if (!mapboxToken) {
     return (
@@ -184,14 +281,70 @@ export function MapView({ bbox, assets, roadCenterlines, roadCorridors, focusPoi
   return <div ref={mapContainerRef} className="h-full w-full rounded-md" />
 }
 
+function applyRasterOverlay(
+  map: Map,
+  sourceId: string,
+  layerId: string,
+  overlay: RasterOverlay | undefined,
+  opacity: number,
+) {
+  if (!overlay) {
+    removeLayerAndSource(map, layerId, sourceId)
+    return
+  }
+
+  const coordinates = toImageCoordinates(overlay.bounds)
+  const existing = map.getSource(sourceId) as ImageSource | undefined
+
+  if (existing) {
+    existing.setCoordinates(coordinates)
+    existing.updateImage({ url: overlay.dataUrl })
+  } else {
+    map.addSource(sourceId, {
+      type: 'image',
+      url: overlay.dataUrl,
+      coordinates,
+    })
+    map.addLayer({
+      id: layerId,
+      type: 'raster',
+      source: sourceId,
+      paint: {
+        'raster-opacity': opacity,
+      },
+    })
+  }
+}
+
+function removeLayerAndSource(map: Map, layerId: string, sourceId: string) {
+  if (map.getLayer(layerId)) {
+    map.removeLayer(layerId)
+  }
+  if (map.getSource(sourceId)) {
+    map.removeSource(sourceId)
+  }
+}
+
+function toImageCoordinates(bounds: [number, number, number, number]) {
+  const [minLng, minLat, maxLng, maxLat] = bounds
+  return [
+    [minLng, maxLat],
+    [maxLng, maxLat],
+    [maxLng, minLat],
+    [minLng, minLat],
+  ] as [number, number][]
+}
+
 function buildBounds({
   assets,
   roadCorridors,
   bbox,
+  boundary,
 }: {
   assets?: FeatureCollection<Polygon>
   roadCorridors?: FeatureCollection<Polygon>
   bbox?: [number, number, number, number]
+  boundary?: Feature<Polygon | MultiPolygon>
 }) {
   const coords: Array<[number, number]> = []
 
@@ -210,6 +363,9 @@ function buildBounds({
   }
   if (assets) {
     assets.features.forEach((feature) => collect(feature.geometry.coordinates))
+  }
+  if (boundary) {
+    collect(boundary.geometry.coordinates as unknown)
   }
   if (bbox) {
     coords.push([bbox[0], bbox[1]], [bbox[2], bbox[3]])

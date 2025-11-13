@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { FeatureCollection, LineString, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from 'geojson'
 import { UploadIcon, CheckCircle2Icon, Loader2Icon, TriangleAlertIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -13,16 +13,19 @@ import { Separator } from './components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table'
 import {
   buildConstraints,
+  fetchConstraintsOverview,
   buildRoads,
   fetchTerrain,
   placeAssets,
   type ConstraintsResponse,
+  type ConstraintsOverviewResponse,
   type IngestResponse,
   type LayoutResponse,
   type RoadsResponse,
   type TerrainResponse,
   uploadSite,
 } from './lib/api'
+import { Switch } from './components/ui/switch'
 
 const PIPELINE_STAGES = ['upload', 'terrain', 'constraints', 'layout', 'roads'] as const
 type PipelineTaskStage = (typeof PIPELINE_STAGES)[number]
@@ -77,6 +80,11 @@ export default function App() {
   const [results, setResults] = useState<PipelineData>({})
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [recenterToken, setRecenterToken] = useState(0)
+  const [constraintsOverview, setConstraintsOverview] = useState<ConstraintsOverviewResponse | null>(null)
+  const [showBaseMask, setShowBaseMask] = useState(true)
+  const [showDistanceMask, setShowDistanceMask] = useState(false)
+  const [showBoundary, setShowBoundary] = useState(false)
+  const [showEntryPoints, setShowEntryPoints] = useState(false)
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null
@@ -108,6 +116,11 @@ export default function App() {
     setStageStatuses(createInitialStatuses())
     setResults({})
     setErrorMessage(null)
+    setConstraintsOverview(null)
+    setShowBaseMask(true)
+    setShowDistanceMask(false)
+    setShowBoundary(false)
+    setShowEntryPoints(false)
   }, [])
 
   const runPipeline = useCallback(async () => {
@@ -118,6 +131,7 @@ export default function App() {
 
     resetPipeline()
     setIsRunning(true)
+    setConstraintsOverview(null)
 
     try {
       advanceStage('upload')
@@ -131,6 +145,13 @@ export default function App() {
       advanceStage('constraints')
       const constraints = await buildConstraints(ingest.runId)
       completeStage('constraints')
+
+      try {
+        const overview = await fetchConstraintsOverview(ingest.runId)
+        setConstraintsOverview(overview)
+      } catch (overviewError) {
+        console.warn('Failed to fetch constraints overview', overviewError)
+      }
 
       advanceStage('layout')
       const layout = await placeAssets(ingest.runId)
@@ -205,6 +226,37 @@ export default function App() {
     }
     return undefined
   }, [results.layout?.placedAssets, mapBbox])
+
+  const baseMaskOverlay = useMemo(() => {
+    if (!constraintsOverview || !showBaseMask) return undefined
+    const [minLng, minLat, maxLng, maxLat] = constraintsOverview.grid.extentWgs84
+    return {
+      dataUrl: constraintsOverview.baseMaskDataUrl,
+      bounds: [minLng, minLat, maxLng, maxLat] as [number, number, number, number],
+    }
+  }, [constraintsOverview, showBaseMask])
+
+  const distanceMaskOverlay = useMemo(() => {
+    if (!constraintsOverview || !showDistanceMask) return undefined
+    const [minLng, minLat, maxLng, maxLat] = constraintsOverview.grid.extentWgs84
+    return {
+      dataUrl: constraintsOverview.distanceMaskDataUrl,
+      bounds: [minLng, minLat, maxLng, maxLat] as [number, number, number, number],
+    }
+  }, [constraintsOverview, showDistanceMask])
+
+  const boundaryFeature = useMemo<Feature<Polygon | MultiPolygon> | undefined>(() => {
+    if (!constraintsOverview?.boundary || !showBoundary) return undefined
+    return constraintsOverview.boundary as Feature<Polygon | MultiPolygon>
+  }, [constraintsOverview?.boundary, showBoundary])
+
+  const entryPointFeatures = useMemo<FeatureCollection<Point> | undefined>(() => {
+    if (!constraintsOverview?.entryPoints || !showEntryPoints) return undefined
+    return {
+      type: 'FeatureCollection',
+      features: constraintsOverview.entryPoints as Feature<Point>[],
+    }
+  }, [constraintsOverview?.entryPoints, showEntryPoints])
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -359,10 +411,44 @@ export default function App() {
                   roadCenterlines={roadCenterlines}
                   roadCorridors={roadCorridors}
                   focusPoint={mapFocusPoint}
+                  baseMaskOverlay={baseMaskOverlay}
+                  distanceMaskOverlay={distanceMaskOverlay}
+                  boundary={boundaryFeature}
+                  entryPoints={entryPointFeatures}
                   recenterToken={recenterToken}
                 />
               </div>
-              <div className="mt-3 flex justify-end">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-4">
+                  <OverlayToggle
+                    id="toggle-base-mask"
+                    label="Base feasible area"
+                    checked={showBaseMask}
+                    onCheckedChange={(checked) => setShowBaseMask(checked)}
+                    disabled={!constraintsOverview}
+                  />
+                  <OverlayToggle
+                    id="toggle-distance-mask"
+                    label="Distance to boundary"
+                    checked={showDistanceMask}
+                    onCheckedChange={(checked) => setShowDistanceMask(checked)}
+                    disabled={!constraintsOverview}
+                  />
+                  <OverlayToggle
+                    id="toggle-boundary"
+                    label="Property boundary"
+                    checked={showBoundary}
+                    onCheckedChange={(checked) => setShowBoundary(checked)}
+                    disabled={!constraintsOverview}
+                  />
+                  <OverlayToggle
+                    id="toggle-entry"
+                    label="Entry points"
+                    checked={showEntryPoints}
+                    onCheckedChange={(checked) => setShowEntryPoints(checked)}
+                    disabled={!constraintsOverview}
+                  />
+                </div>
                 <Button
                   variant="secondary"
                   onClick={() => setRecenterToken((token) => token + 1)}
@@ -465,6 +551,32 @@ function formatNumber(value: number, decimals = 0) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })
+}
+
+function OverlayToggle({
+  id,
+  label,
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  id: string
+  label: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+      <Label
+        htmlFor={id}
+        className={`text-sm text-muted-foreground ${disabled ? 'opacity-50' : ''}`}
+      >
+        {label}
+      </Label>
+    </div>
+  )
 }
 
 function featureCollectionBbox<T extends Polygon | LineString>(collection: FeatureCollection<T>) {

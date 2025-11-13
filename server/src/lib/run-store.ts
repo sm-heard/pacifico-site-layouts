@@ -42,6 +42,8 @@ export interface RunManifest {
   constraints?: {
     baseMaskPath: string
     distanceMaskPath: string
+    baseMaskPngPath?: string
+    distanceMaskPngPath?: string
     assetMasks: Record<string, {
       path: string
       feasibleCells: number

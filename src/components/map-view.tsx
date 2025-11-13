@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import mapboxgl, { type Map, type Marker, type ImageSource } from 'mapbox-gl'
+import mapboxgl, { type Map, type Marker, type ImageSource, type GeoJSONSourceRaw } from 'mapbox-gl'
 import type { Feature, FeatureCollection, LineString, MultiPolygon, Point, Polygon } from 'geojson'
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
@@ -191,7 +191,7 @@ export function MapView({
     } else {
       map.once('idle', applyCamera)
     }
-  }, [assets, roadCorridors, bbox, hasLayers, recenterToken])
+  }, [assets, roadCorridors, bbox, boundary, hasLayers, recenterToken])
 
   useEffect(() => {
     const map = mapRef.current
@@ -213,14 +213,15 @@ export function MapView({
 
     if (boundary) {
       const source = map.getSource(BOUNDARY_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
-      const data = boundary as any
+      const data: Feature<Polygon | MultiPolygon> = boundary
       if (source) {
         source.setData(data)
       } else {
-        map.addSource(BOUNDARY_SOURCE_ID, {
+        const raw: GeoJSONSourceRaw = {
           type: 'geojson',
           data,
-        })
+        }
+        map.addSource(BOUNDARY_SOURCE_ID, raw)
         map.addLayer({
           id: BOUNDARY_LAYER_ID,
           type: 'line',
@@ -243,14 +244,15 @@ export function MapView({
 
     if (entryPoints && entryPoints.features.length > 0) {
       const source = map.getSource(ENTRY_POINTS_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
-      const data = entryPoints as any
+      const data: FeatureCollection<Point> = entryPoints
       if (source) {
         source.setData(data)
       } else {
-        map.addSource(ENTRY_POINTS_SOURCE_ID, {
+        const raw: GeoJSONSourceRaw = {
           type: 'geojson',
           data,
-        })
+        }
+        map.addSource(ENTRY_POINTS_SOURCE_ID, raw)
         map.addLayer({
           id: ENTRY_POINTS_LAYER_ID,
           type: 'circle',

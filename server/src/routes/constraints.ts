@@ -1,12 +1,18 @@
 import { Hono } from 'hono'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
-import { buildConstraintsForRun } from '../services/constraints.js'
+import { buildConstraintsForRun, type ConstraintsOverrides } from '../services/constraints.js'
 import { logger } from '../lib/logger.js'
 import { readManifest, readRunMetadata, readNormalizedGeoJson, getRunFilePath } from '../lib/run-store.js'
 
 const requestSchema = z.object({
   runId: z.string().min(1),
+  params: z
+    .object({
+      maxSlopePercent: z.number().min(0).max(100).optional(),
+      propertySetbackMeters: z.number().min(0).optional(),
+    })
+    .optional(),
 })
 
 export const constraintRoutes = new Hono()
@@ -18,9 +24,10 @@ constraintRoutes.post('/build', async (c) => {
     return c.json({ error: 'Invalid request body', details: parsed.error.format() }, 400)
   }
 
-  const { runId } = parsed.data
+  const { runId, params } = parsed.data
   try {
-    const result = await buildConstraintsForRun(runId)
+    const overrides: ConstraintsOverrides = params ?? {}
+    const result = await buildConstraintsForRun(runId, overrides)
     return c.json({ runId, ...result })
   } catch (error) {
     logger.error({ error, runId }, 'Failed to build constraints')

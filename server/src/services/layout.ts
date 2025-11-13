@@ -9,13 +9,13 @@ import {
   updateManifest,
 } from '../lib/run-store.js'
 import { readUint8Array, readFloat32Array } from '../lib/io/binary.js'
-import { ASSET_CONSTRAINTS, ASSET_TYPES, type AssetType } from '../config/assets.js'
+import { ASSET_CONSTRAINTS, ASSET_TYPES, type AssetConstraintsProfile, type AssetType } from '../config/assets.js'
 import { findComponents } from '../lib/raster/components.js'
 import type { AlignedGrid } from '../lib/geo/grid.js'
 import { cellToLocal } from '../lib/geo/grid.js'
 import { fromLocalMeters, type LocalProjection } from '../lib/geo/crs.js'
 
-type AssetConfig = (typeof ASSET_CONSTRAINTS)[AssetType]
+type AssetConfig = AssetConstraintsProfile
 
 interface PlacementCandidate {
   assetType: AssetType
@@ -41,6 +41,10 @@ interface PlacedAsset {
   slopeMeanPercent: number
 }
 
+export interface LayoutOverrides {
+  maxSlopePercent?: number
+}
+
 export interface LayoutResult {
   features: Feature<Polygon>[]
   placedAssets: PlacedAsset[]
@@ -48,7 +52,10 @@ export interface LayoutResult {
   layoutPath: string
 }
 
-export async function placeAssetsForRun(runId: string): Promise<LayoutResult> {
+export async function placeAssetsForRun(
+  runId: string,
+  overrides: LayoutOverrides = {},
+): Promise<LayoutResult> {
   const manifest = await readManifest(runId)
   if (!manifest) {
     throw new Error(`Run manifest not found for ${runId}`)
@@ -78,6 +85,15 @@ export async function placeAssetsForRun(runId: string): Promise<LayoutResult> {
   const placements: PlacedAsset[] = []
   const skipped: LayoutResult['skippedAssets'] = []
 
+  const effectiveConstraints = ASSET_TYPES.reduce<Record<AssetType, AssetConstraintsProfile>>((acc, assetType) => {
+    const asset = ASSET_CONSTRAINTS[assetType]
+    acc[assetType] = {
+      ...asset,
+      maxSlopePercent: overrides.maxSlopePercent ?? asset.maxSlopePercent,
+    }
+    return acc
+  }, {} as Record<AssetType, AssetConstraintsProfile>)
+
   for (const assetType of ASSET_TYPES) {
     const assetMaskInfo = manifest.constraints.assetMasks[assetType]
     if (!assetMaskInfo) {
@@ -88,7 +104,7 @@ export async function placeAssetsForRun(runId: string): Promise<LayoutResult> {
     const assetMask = await readUint8Array(getRunPath(runId, assetMaskInfo.path), totalCells)
     const { summaries, labels } = findComponents(assetMask, grid.width, grid.height, slopePercent)
 
-  const assetConfig = ASSET_CONSTRAINTS[assetType]
+    const assetConfig = effectiveConstraints[assetType]
     const footprintCellsNeeded = Math.ceil(
       (assetConfig.footprint.widthMeters * assetConfig.footprint.heightMeters) /
         (grid.resolution * grid.resolution),
@@ -148,6 +164,12 @@ export async function placeAssetsForRun(runId: string): Promise<LayoutResult> {
         heightMeters: placement.footprint.heightMeters,
       })),
       skipped,
+    },
+    parameters: {
+      ...(existing.parameters ?? {}),
+      layout: {
+        maxSlopePercent: overrides.maxSlopePercent ?? null,
+      },
     },
   }))
 

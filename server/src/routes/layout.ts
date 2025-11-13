@@ -1,10 +1,15 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { logger } from '../lib/logger.js'
-import { placeAssetsForRun } from '../services/layout.js'
+import { placeAssetsForRun, type LayoutOverrides } from '../services/layout.js'
 
 const requestSchema = z.object({
   runId: z.string().min(1),
+  params: z
+    .object({
+      maxSlopePercent: z.number().min(0).max(100).optional(),
+    })
+    .optional(),
 })
 
 export const layoutRoutes = new Hono()
@@ -16,10 +21,11 @@ layoutRoutes.post('/place', async (c) => {
     return c.json({ error: 'Invalid request body', details: parsed.error.format() }, 400)
   }
 
-  const { runId } = parsed.data
+  const { runId, params } = parsed.data
 
   try {
-    const result = await placeAssetsForRun(runId)
+    const overrides: LayoutOverrides = params ?? {}
+    const result = await placeAssetsForRun(runId, overrides)
     return c.json({ runId, ...result })
   } catch (error) {
     logger.error({ error, runId }, 'Failed to place assets')

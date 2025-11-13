@@ -117,12 +117,60 @@ const constraintsOverviewSchema = z.object({
   distanceMaskDataUrl: z.string(),
 })
 
+const runManifestSchema = z.object({
+  runId: z.string(),
+  manifest: z
+    .object({
+      inputs: z
+        .object({
+          normalizedGeoJsonPath: z.string().optional(),
+        })
+        .optional(),
+      constraints: z
+        .object({
+          baseMaskPath: z.string().optional(),
+          distanceMaskPath: z.string().optional(),
+          baseMaskPngPath: z.string().optional(),
+          distanceMaskPngPath: z.string().optional(),
+        })
+        .optional(),
+      layout: z
+        .object({
+          assetsGeoJsonPath: z.string().optional(),
+        })
+        .optional(),
+      roads: z
+        .object({
+          centerlinesPath: z.string().optional(),
+          corridorsPath: z.string().optional(),
+        })
+        .optional(),
+      parameters: z.record(z.any()).optional(),
+    })
+    .passthrough(),
+})
+
 export type IngestResponse = z.infer<typeof ingestSchema>
 export type TerrainResponse = z.infer<typeof terrainSchema>
 export type ConstraintsResponse = z.infer<typeof constraintsSchema>
 export type LayoutResponse = z.infer<typeof layoutSchema>
 export type RoadsResponse = z.infer<typeof roadsSchema>
 export type ConstraintsOverviewResponse = z.infer<typeof constraintsOverviewSchema>
+export type RunManifestResponse = z.infer<typeof runManifestSchema>['manifest']
+
+export interface ConstraintParams {
+  maxSlopePercent?: number
+  propertySetbackMeters?: number
+}
+
+export interface LayoutParams {
+  maxSlopePercent?: number
+}
+
+export interface RoadParams {
+  widthMeters?: number
+  maxGradePercent?: number
+}
 
 async function handleResponse<T>(response: Response, schema: z.ZodSchema<T>): Promise<T> {
   if (!response.ok) {
@@ -158,11 +206,20 @@ export async function fetchTerrain(runId: string): Promise<TerrainResponse> {
   return handleResponse(response, terrainSchema)
 }
 
-export async function buildConstraints(runId: string): Promise<ConstraintsResponse> {
+export async function rebuildTerrain(runId: string): Promise<TerrainResponse> {
+  return fetchTerrain(runId)
+}
+
+export async function buildConstraints(
+  runId: string,
+  params?: ConstraintParams,
+): Promise<ConstraintsResponse> {
   const response = await fetch(`${baseUrl}/api/constraints/build`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ runId }),
+    body: JSON.stringify(
+      params && Object.keys(params).length > 0 ? { runId, params } : { runId },
+    ),
   })
   return handleResponse(response, constraintsSchema)
 }
@@ -172,22 +229,45 @@ export async function fetchConstraintsOverview(runId: string): Promise<Constrain
   return handleResponse(response, constraintsOverviewSchema)
 }
 
-export async function placeAssets(runId: string): Promise<LayoutResponse> {
+export async function fetchRunManifest(runId: string): Promise<z.infer<typeof runManifestSchema>> {
+  const response = await fetch(`${baseUrl}/api/runs/${runId}/manifest`)
+  return handleResponse(response, runManifestSchema)
+}
+
+export async function placeAssets(
+  runId: string,
+  params?: LayoutParams,
+): Promise<LayoutResponse> {
   const response = await fetch(`${baseUrl}/api/layout/place`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ runId }),
+    body: JSON.stringify(
+      params && Object.keys(params).length > 0 ? { runId, params } : { runId },
+    ),
   })
   return handleResponse(response, layoutSchema)
 }
 
-export async function buildRoads(runId: string): Promise<RoadsResponse> {
+export async function rebuildLayout(runId: string, params?: LayoutParams): Promise<LayoutResponse> {
+  return placeAssets(runId, params)
+}
+
+export async function buildRoads(
+  runId: string,
+  params?: RoadParams,
+): Promise<RoadsResponse> {
   const response = await fetch(`${baseUrl}/api/roads/build`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ runId }),
+    body: JSON.stringify(
+      params && Object.keys(params).length > 0 ? { runId, params } : { runId },
+    ),
   })
   return handleResponse(response, roadsSchema)
+}
+
+export async function rebuildRoads(runId: string, params?: RoadParams): Promise<RoadsResponse> {
+  return buildRoads(runId, params)
 }
 
 export type PipelineStage =

@@ -13,7 +13,7 @@ import {
 import { readFloat32Array, readUint8Array } from '../lib/io/binary.js'
 import { buildFrictionSurface } from '../lib/raster/friction.js'
 import { runAStar } from '../lib/raster/pathfinding.js'
-import { DEFAULT_ROAD_CONFIG } from '../config/roads.js'
+import { DEFAULT_ROAD_CONFIG, type RoadConfig } from '../config/roads.js'
 import { cellToLocal, localToCell, type AlignedGrid } from '../lib/geo/grid.js'
 import { fromLocalMeters, toLocalMeters, type LocalProjection } from '../lib/geo/crs.js'
 
@@ -34,7 +34,15 @@ export interface RoadBuildResult {
   centerlinesPath: string
 }
 
-export async function buildRoadsForRun(runId: string): Promise<RoadBuildResult> {
+export interface RoadOverrides {
+  widthMeters?: number
+  maxGradePercent?: number
+}
+
+export async function buildRoadsForRun(
+  runId: string,
+  overrides: RoadOverrides = {},
+): Promise<RoadBuildResult> {
   const manifest = await readManifest(runId)
   if (!manifest) {
     throw new Error(`Run manifest not found for ${runId}`)
@@ -64,12 +72,17 @@ export async function buildRoadsForRun(runId: string): Promise<RoadBuildResult> 
   const slopePercent = await readFloat32Array(getRunPath(runId, manifest.terrain.slopePercentPath), totalCells)
   const dem = await readFloat32Array(getRunPath(runId, manifest.terrain.demPath), totalCells)
 
+  const roadConfig: RoadConfig = {
+    ...DEFAULT_ROAD_CONFIG,
+    ...overrides,
+  }
+
   const friction = buildFrictionSurface(
     slopePercent,
     baseMask,
     grid.width,
     grid.height,
-    DEFAULT_ROAD_CONFIG,
+    roadConfig,
   )
 
   const entry = await resolveEntryPoint(runId, grid, projection)
@@ -109,7 +122,7 @@ export async function buildRoadsForRun(runId: string): Promise<RoadBuildResult> 
       targetCol: placement.centerCol,
     })
 
-    const corridor = buffer(line, DEFAULT_ROAD_CONFIG.widthMeters / 2000, {
+    const corridor = buffer(line, roadConfig.widthMeters / 2000, {
       units: 'kilometers',
       steps: 8,
     }) as Feature<Polygon>
@@ -149,6 +162,13 @@ export async function buildRoadsForRun(runId: string): Promise<RoadBuildResult> 
         meanGradePercent: segment.meanGradePercent,
       })),
       totalLengthMeters,
+    },
+    parameters: {
+      ...(existing.parameters ?? {}),
+      roads: {
+        widthMeters: roadConfig.widthMeters,
+        maxGradePercent: roadConfig.maxGradePercent,
+      },
     },
   }))
 

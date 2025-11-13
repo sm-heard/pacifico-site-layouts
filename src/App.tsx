@@ -17,12 +17,14 @@ import {
   buildRoads,
   fetchTerrain,
   placeAssets,
+  fetchRunManifest,
   type ConstraintsResponse,
   type ConstraintsOverviewResponse,
   type IngestResponse,
   type LayoutResponse,
   type RoadsResponse,
   type TerrainResponse,
+  type RunManifestResponse,
   uploadSite,
 } from './lib/api'
 import { Switch } from './components/ui/switch'
@@ -58,6 +60,20 @@ interface PipelineData {
   roads?: RoadsResponse
 }
 
+interface PipelineParameters {
+  maxSlopePercent: number
+  propertySetbackMeters: number
+  roadWidthMeters: number
+  roadMaxGradePercent: number
+}
+
+const DEFAULT_PIPELINE_PARAMETERS: PipelineParameters = {
+  maxSlopePercent: 6,
+  propertySetbackMeters: 75,
+  roadWidthMeters: 8,
+  roadMaxGradePercent: 10,
+}
+
 function getStatusIcon(status: StageStatus) {
   switch (status) {
     case 'success':
@@ -85,6 +101,23 @@ export default function App() {
   const [showDistanceMask, setShowDistanceMask] = useState(false)
   const [showBoundary, setShowBoundary] = useState(false)
   const [showEntryPoints, setShowEntryPoints] = useState(false)
+  const [runManifest, setRunManifest] = useState<RunManifestResponse | null>(null)
+  const [pipelineParams, setPipelineParams] = useState<PipelineParameters>(DEFAULT_PIPELINE_PARAMETERS)
+  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8787'
+
+  const constraintParams = useMemo(() => ({
+    maxSlopePercent: pipelineParams.maxSlopePercent,
+    propertySetbackMeters: pipelineParams.propertySetbackMeters,
+  }), [pipelineParams.maxSlopePercent, pipelineParams.propertySetbackMeters])
+
+  const layoutParams = useMemo(() => ({
+    maxSlopePercent: pipelineParams.maxSlopePercent,
+  }), [pipelineParams.maxSlopePercent])
+
+  const roadParams = useMemo(() => ({
+    widthMeters: pipelineParams.roadWidthMeters,
+    maxGradePercent: pipelineParams.roadMaxGradePercent,
+  }), [pipelineParams.roadWidthMeters, pipelineParams.roadMaxGradePercent])
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null
@@ -112,6 +145,52 @@ export default function App() {
     setStageStatuses((prev) => ({ ...prev, [stage]: 'success' }))
   }, [])
 
+  const setStageRunningAndResetDownstream = useCallback((stage: PipelineTaskStage) => {
+    setStageStatuses((prev) => {
+      const next = { ...prev }
+      const stageIndex = mapStageOrder.get(stage) ?? 0
+      PIPELINE_STAGES.forEach((entry, index) => {
+        if (index > stageIndex) {
+          next[entry] = 'pending'
+        }
+      })
+      next[stage] = 'running'
+      return next
+    })
+  }, [])
+
+  const markStageSuccess = useCallback((stage: PipelineTaskStage) => {
+    setStageStatuses((prev) => ({ ...prev, [stage]: 'success' }))
+  }, [])
+
+  const markStageError = useCallback((stage: PipelineTaskStage) => {
+    setStageStatuses((prev) => ({ ...prev, [stage]: 'error' }))
+  }, [])
+
+  const refreshManifest = useCallback(async (runId: string) => {
+    try {
+      const data = await fetchRunManifest(runId)
+      setRunManifest(data.manifest)
+    } catch (error) {
+      console.warn('Failed to fetch run manifest', error)
+    }
+  }, [])
+
+  const handleParameterInput = useCallback(
+    (key: keyof PipelineParameters) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = Number(event.target.value)
+      setPipelineParams((prev) => ({
+        ...prev,
+        [key]: Number.isFinite(value) ? value : prev[key],
+      }))
+    },
+    [],
+  )
+
+  const resetParameters = useCallback(() => {
+    setPipelineParams(DEFAULT_PIPELINE_PARAMETERS)
+  }, [])
+
   const resetPipeline = useCallback(() => {
     setStageStatuses(createInitialStatuses())
     setResults({})
@@ -121,6 +200,7 @@ export default function App() {
     setShowDistanceMask(false)
     setShowBoundary(false)
     setShowEntryPoints(false)
+    setRunManifest(null)
   }, [])
 
   const runPipeline = useCallback(async () => {
@@ -137,13 +217,14 @@ export default function App() {
       advanceStage('upload')
       const ingest = await uploadSite(file)
       completeStage('upload')
+      await refreshManifest(ingest.runId)
 
       advanceStage('terrain')
       const terrain = await fetchTerrain(ingest.runId)
       completeStage('terrain')
 
       advanceStage('constraints')
-      const constraints = await buildConstraints(ingest.runId)
+      const constraints = await buildConstraints(ingest.runId, constraintParams)
       completeStage('constraints')
 
       try {
@@ -154,15 +235,16 @@ export default function App() {
       }
 
       advanceStage('layout')
-      const layout = await placeAssets(ingest.runId)
+      const layout = await placeAssets(ingest.runId, layoutParams)
       completeStage('layout')
 
       advanceStage('roads')
-      const roads = await buildRoads(ingest.runId)
+      const roads = await buildRoads(ingest.runId, roadParams)
       completeStage('roads')
 
       setResults({ ingest, terrain, constraints, layout, roads })
       setRecenterToken((token) => token + 1)
+      await refreshManifest(ingest.runId)
       toast.success('Pipeline completed')
     } catch (error) {
       console.error(error)
@@ -180,7 +262,7 @@ export default function App() {
     } finally {
       setIsRunning(false)
     }
-  }, [advanceStage, completeStage, file, resetPipeline])
+  }, [advanceStage, completeStage, constraintParams, file, layoutParams, refreshManifest, resetPipeline, roadParams])
 
   const assetCollection = useMemo<FeatureCollection<Polygon> | undefined>(() => {
     if (!results.layout?.features) return undefined
@@ -258,6 +340,208 @@ export default function App() {
     }
   }, [constraintsOverview?.entryPoints, showEntryPoints])
 
+  const downloadItems = useMemo(() => {
+    const runId = results.ingest?.runId
+    if (!runId || !runManifest) return []
+
+    const items: Array<{ label: string; path: string }> = []
+    const push = (label: string, path?: string | null) => {
+      if (path) items.push({ label, path })
+    }
+
+    push('Normalized site (GeoJSON)', runManifest.inputs?.normalizedGeoJsonPath)
+    push('Base feasible area (PNG)', runManifest.constraints?.baseMaskPngPath)
+    push('Distance to boundary (PNG)', runManifest.constraints?.distanceMaskPngPath)
+    push('Placed assets (GeoJSON)', runManifest.layout?.assetsGeoJsonPath)
+    push('Road centerlines (GeoJSON)', runManifest.roads?.centerlinesPath)
+    push('Road corridors (GeoJSON)', runManifest.roads?.corridorsPath)
+    push('Base mask (binary)', runManifest.constraints?.baseMaskPath)
+    push('Distance to boundary (binary)', runManifest.constraints?.distanceMaskPath)
+
+    return items.map((item) => ({
+      label: item.label,
+      url: buildDownloadUrl(apiBaseUrl, runId, item.path),
+      filename: getFilename(item.path),
+    }))
+  }, [apiBaseUrl, runManifest, results.ingest?.runId])
+
+  const manifestParameters = runManifest?.parameters as
+    | {
+        constraints?: { maxSlopePercent?: number; propertySetbackMeters?: number | null }
+        roads?: { widthMeters?: number; maxGradePercent?: number | null }
+      }
+    | undefined
+
+  const handleRerunTerrain = useCallback(async () => {
+    const runId = results.ingest?.runId
+    if (!runId) {
+      toast.error('Run the full pipeline before rerunning terrain')
+      return
+    }
+    setIsRunning(true)
+    setStageRunningAndResetDownstream('terrain')
+    setResults((prev) => ({ ...prev, terrain: undefined, constraints: undefined, layout: undefined, roads: undefined }))
+    setConstraintsOverview(null)
+    setShowBaseMask(true)
+    setShowDistanceMask(false)
+    setShowBoundary(false)
+    setShowEntryPoints(false)
+    try {
+      const terrain = await fetchTerrain(runId)
+      setResults((prev) => ({ ...prev, terrain }))
+      markStageSuccess('terrain')
+      await refreshManifest(runId)
+      toast.success('Terrain regenerated')
+    } catch (error) {
+      console.error(error)
+      markStageError('terrain')
+      toast.error(error instanceof Error ? error.message : 'Failed to rebuild terrain')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [markStageError, markStageSuccess, refreshManifest, results.ingest?.runId, setStageRunningAndResetDownstream])
+
+  const handleRerunConstraints = useCallback(async () => {
+    const runId = results.ingest?.runId
+    if (!runId || !results.terrain) {
+      toast.error('Generate terrain before rebuilding constraints')
+      return
+    }
+    setIsRunning(true)
+    setStageRunningAndResetDownstream('constraints')
+    setResults((prev) => ({ ...prev, constraints: undefined, layout: undefined, roads: undefined }))
+    setConstraintsOverview(null)
+    setShowBaseMask(true)
+    setShowDistanceMask(false)
+    setShowBoundary(false)
+    setShowEntryPoints(false)
+    try {
+      const constraints = await buildConstraints(runId, constraintParams)
+      setResults((prev) => ({ ...prev, constraints, layout: undefined, roads: undefined }))
+      try {
+        const overview = await fetchConstraintsOverview(runId)
+        setConstraintsOverview(overview)
+      } catch (overviewError) {
+        console.warn('Failed to fetch constraints overview', overviewError)
+      }
+      markStageSuccess('constraints')
+      toast.success('Constraints rebuilt')
+      await refreshManifest(runId)
+    } catch (error) {
+      console.error(error)
+      markStageError('constraints')
+      toast.error(error instanceof Error ? error.message : 'Failed to rebuild constraints')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [constraintParams, markStageError, markStageSuccess, refreshManifest, results.ingest?.runId, results.terrain, setStageRunningAndResetDownstream])
+
+  const handleRerunLayout = useCallback(async () => {
+    const runId = results.ingest?.runId
+    if (!runId || !results.constraints) {
+      toast.error('Generate constraints before placing assets')
+      return
+    }
+    setIsRunning(true)
+    setStageRunningAndResetDownstream('layout')
+    setResults((prev) => ({ ...prev, layout: undefined, roads: undefined }))
+    try {
+      const layout = await placeAssets(runId, layoutParams)
+      setResults((prev) => ({ ...prev, layout, roads: undefined }))
+      markStageSuccess('layout')
+      setRecenterToken((token) => token + 1)
+      await refreshManifest(runId)
+      toast.success('Assets placed')
+    } catch (error) {
+      console.error(error)
+      markStageError('layout')
+      toast.error(error instanceof Error ? error.message : 'Failed to place assets')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [layoutParams, markStageError, markStageSuccess, refreshManifest, results.constraints, results.ingest?.runId, setStageRunningAndResetDownstream])
+
+  const handleRerunRoads = useCallback(async () => {
+    const runId = results.ingest?.runId
+    if (!runId || !results.layout) {
+      toast.error('Place assets before routing roads')
+      return
+    }
+    setIsRunning(true)
+    setStageRunningAndResetDownstream('roads')
+    setResults((prev) => ({ ...prev, roads: undefined }))
+    try {
+      const roads = await buildRoads(runId, roadParams)
+      setResults((prev) => ({ ...prev, roads }))
+      markStageSuccess('roads')
+      setRecenterToken((token) => token + 1)
+      await refreshManifest(runId)
+      toast.success('Roads routed')
+    } catch (error) {
+      console.error(error)
+      markStageError('roads')
+      toast.error(error instanceof Error ? error.message : 'Failed to route roads')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [markStageError, markStageSuccess, refreshManifest, results.ingest?.runId, results.layout, roadParams, setStageRunningAndResetDownstream])
+
+  const renderStageAction = (stage: PipelineStage) => {
+    const isStageRunning = stageStatuses[stage] === 'running'
+    const disabledCommon = isRunning || isStageRunning
+
+    switch (stage) {
+      case 'upload':
+        return <span className="text-xs text-muted-foreground">Upload new file</span>
+      case 'terrain':
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRerunTerrain}
+            disabled={disabledCommon || !results.ingest}
+          >
+            Re-run
+          </Button>
+        )
+      case 'constraints':
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRerunConstraints}
+            disabled={disabledCommon || !results.ingest || !results.terrain}
+          >
+            Re-run
+          </Button>
+        )
+      case 'layout':
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRerunLayout}
+            disabled={disabledCommon || !results.constraints}
+          >
+            Re-run
+          </Button>
+        )
+      case 'roads':
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRerunRoads}
+            disabled={disabledCommon || !results.layout}
+          >
+            Re-run
+          </Button>
+        )
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background/50 backdrop-blur">
@@ -320,6 +604,71 @@ export default function App() {
                 )}
               </Button>
 
+              <Separator className="my-4" />
+
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium">Pipeline parameters</p>
+                  <p className="text-xs text-muted-foreground">
+                    Adjust constraint, layout, and road parameters before running.
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={resetParameters} disabled={isRunning}>
+                  Reset
+                </Button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="param-max-slope">Max slope for assets (%)</Label>
+                  <Input
+                    id="param-max-slope"
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    disabled={isRunning}
+                    value={pipelineParams.maxSlopePercent}
+                    onChange={handleParameterInput('maxSlopePercent')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="param-setback">Property setback (m)</Label>
+                  <Input
+                    id="param-setback"
+                    type="number"
+                    min={0}
+                    step={5}
+                    disabled={isRunning}
+                    value={pipelineParams.propertySetbackMeters}
+                    onChange={handleParameterInput('propertySetbackMeters')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="param-road-width">Road width (m)</Label>
+                  <Input
+                    id="param-road-width"
+                    type="number"
+                    min={1}
+                    step={0.5}
+                    disabled={isRunning}
+                    value={pipelineParams.roadWidthMeters}
+                    onChange={handleParameterInput('roadWidthMeters')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="param-road-grade">Road max grade (%)</Label>
+                  <Input
+                    id="param-road-grade"
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    disabled={isRunning}
+                    value={pipelineParams.roadMaxGradePercent}
+                    onChange={handleParameterInput('roadMaxGradePercent')}
+                  />
+                </div>
+              </div>
+
               <Progress value={stageProgress(stageStatuses)} className="h-2" />
 
               {errorMessage ? (
@@ -339,6 +688,7 @@ export default function App() {
                   <TableRow>
                     <TableHead>Stage</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -348,6 +698,9 @@ export default function App() {
                       <TableCell className="flex items-center gap-2">
                         {getStatusIcon(stageStatuses[stage])}
                         <span className="text-sm capitalize">{stageStatuses[stage]}</span>
+                      </TableCell>
+                      <TableCell>
+                        {renderStageAction(stage)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -391,7 +744,49 @@ export default function App() {
                       value={`${formatNumber(results.roads.totalLengthMeters / 1000, 2)} km`}
                     />
                   ) : null}
+                  <SummaryItem
+                    label="Asset slope limit"
+                    value={`${formatNumber(manifestParameters?.constraints?.maxSlopePercent ?? pipelineParams.maxSlopePercent, 1)}%`}
+                  />
+                  <SummaryItem
+                    label="Property setback"
+                    value={`${formatNumber(manifestParameters?.constraints?.propertySetbackMeters ?? pipelineParams.propertySetbackMeters, 0)} m`}
+                  />
+                  <SummaryItem
+                    label="Road width"
+                    value={`${formatNumber(manifestParameters?.roads?.widthMeters ?? pipelineParams.roadWidthMeters, 1)} m`}
+                  />
+                  <SummaryItem
+                    label="Road max grade"
+                    value={`${formatNumber(manifestParameters?.roads?.maxGradePercent ?? pipelineParams.roadMaxGradePercent, 1)}%`}
+                  />
                 </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {results.ingest && runManifest ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Exports</CardTitle>
+                <CardDescription>Download generated artifacts for this run.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {downloadItems.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {downloadItems.map((item) => (
+                      <Button key={item.label} variant="outline" size="sm" asChild>
+                        <a href={item.url} download={item.filename} target="_blank" rel="noopener noreferrer">
+                          {item.label}
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Run the pipeline to generate exportable outputs.
+                  </p>
+                )}
               </CardContent>
             </Card>
           ) : null}
@@ -551,6 +946,20 @@ function formatNumber(value: number, decimals = 0) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })
+}
+
+function buildDownloadUrl(baseUrl: string, runId: string, relativePath: string) {
+  const encodedSegments = relativePath
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')
+  return `${baseUrl.replace(/\/$/, '')}/api/files/${encodeURIComponent(runId)}/${encodedSegments}`
+}
+
+function getFilename(relativePath: string) {
+  const segments = relativePath.split('/')
+  return segments[segments.length - 1] || relativePath
 }
 
 function OverlayToggle({

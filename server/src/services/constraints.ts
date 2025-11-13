@@ -13,7 +13,7 @@ import { normalizeInputs } from '../lib/geo/geojson.js'
 import { rasterizePolygonFeature } from '../lib/raster/polygon.js'
 import { computeDistanceFromBoundary } from '../lib/raster/distance.js'
 import { readFloat32Array, writeFloat32Array, writeUint8Array } from '../lib/io/binary.js'
-import { ASSET_CONSTRAINTS, ASSET_TYPES } from '../config/assets.js'
+import { ASSET_CONSTRAINTS, ASSET_TYPES, type AssetConstraintsProfile, type AssetType } from '../config/assets.js'
 
 const DISTANCE_MAP_FILENAME = 'distance-to-boundary.bin'
 const BASE_MASK_FILENAME = 'base-mask.bin'
@@ -37,7 +37,15 @@ export interface ConstraintsBuildResult {
   maxDistanceMeters: number
 }
 
-export async function buildConstraintsForRun(runId: string): Promise<ConstraintsBuildResult> {
+export interface ConstraintsOverrides {
+  maxSlopePercent?: number
+  propertySetbackMeters?: number
+}
+
+export async function buildConstraintsForRun(
+  runId: string,
+  overrides: ConstraintsOverrides = {},
+): Promise<ConstraintsBuildResult> {
   const manifest = await readManifest(runId)
   if (!manifest) {
     throw new Error(`Run manifest not found for ${runId}`)
@@ -103,8 +111,18 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
 
   const assetSummaries: ConstraintsBuildResult['assetMasks'] = []
 
-  for (const assetType of ASSET_TYPES) {
+  const effectiveConstraints = ASSET_TYPES.reduce<Record<AssetType, AssetConstraintsProfile>>((acc, assetType) => {
     const asset = ASSET_CONSTRAINTS[assetType]
+    acc[assetType] = {
+      ...asset,
+      maxSlopePercent: overrides.maxSlopePercent ?? asset.maxSlopePercent,
+      propertySetbackMeters: overrides.propertySetbackMeters ?? asset.propertySetbackMeters,
+    }
+    return acc
+  }, {} as Record<AssetType, AssetConstraintsProfile>)
+
+  for (const assetType of ASSET_TYPES) {
+    const asset = effectiveConstraints[assetType]
     const assetMask = new Uint8Array(totalCells)
 
     for (let i = 0; i < totalCells; i += 1) {
@@ -152,6 +170,13 @@ export async function buildConstraintsForRun(runId: string): Promise<Constraints
           feasibleCells: asset.feasibleCells,
         }]),
       ),
+    },
+    parameters: {
+      ...(existing.parameters ?? {}),
+      constraints: {
+        maxSlopePercent: overrides.maxSlopePercent ?? null,
+        propertySetbackMeters: overrides.propertySetbackMeters ?? null,
+      },
     },
   }))
 

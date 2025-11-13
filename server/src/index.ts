@@ -10,6 +10,8 @@ import { terrainRoutes } from './routes/terrain.js'
 import { constraintRoutes } from './routes/constraints.js'
 import { layoutRoutes } from './routes/layout.js'
 import { roadRoutes } from './routes/roads.js'
+import { filesRoutes } from './routes/files.js'
+import { runsRoutes } from './routes/runs.js'
 
 const app = new Hono()
 
@@ -37,6 +39,8 @@ app.route('/api/terrain', terrainRoutes)
 app.route('/api/constraints', constraintRoutes)
 app.route('/api/layout', layoutRoutes)
 app.route('/api/roads', roadRoutes)
+app.route('/api/files', filesRoutes)
+app.route('/api/runs', runsRoutes)
 
 app.all('*', (c) => c.json({ error: 'Not Found' }, 404))
 

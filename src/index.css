@@ -1,13 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Work+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -39,82 +40,290 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Work Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --radius: 4px;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Topographic dark terrain palette */
+  --background: #0a0e1a;
+  --foreground: #e2e8f0;
+  --card: #121827;
+  --card-foreground: #e2e8f0;
+  --popover: #1a2235;
+  --popover-foreground: #e2e8f0;
+
+  /* Elevation amber - highland/peak accent */
+  --primary: #f59e0b;
+  --primary-foreground: #0a0e1a;
+
+  /* Terrain teal - mid-elevation */
+  --secondary: #1e293b;
+  --secondary-foreground: #14b8a6;
+
+  /* Muted states */
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+
+  /* Accent - bright teal */
+  --accent: #14b8a6;
+  --accent-foreground: #0a0e1a;
+
+  /* Error - peak crimson */
+  --destructive: #ef4444;
+
+  /* Borders - subtle cyan grid lines */
+  --border: rgba(20, 184, 166, 0.15);
+  --input: rgba(20, 184, 166, 0.2);
+  --ring: #14b8a6;
+
+  /* Charts - elevation gradient */
+  --chart-1: #f59e0b;
+  --chart-2: #14b8a6;
+  --chart-3: #10b981;
+  --chart-4: #06b6d4;
+  --chart-5: #8b5cf6;
+
+  /* Sidebar */
+  --sidebar: #0f172a;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #f59e0b;
+  --sidebar-primary-foreground: #0a0e1a;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #14b8a6;
+  --sidebar-border: rgba(20, 184, 166, 0.15);
+  --sidebar-ring: #14b8a6;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Topographic grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image:
+      linear-gradient(rgba(20, 184, 166, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 184, 166, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Subtle noise texture */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03' /%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: 0.025em;
+    font-weight: 600;
+  }
+
+  /* Monospace for data/metrics */
+  .font-mono,
+  table td:not(:first-child),
+  .text-sm.font-medium:has(+ .text-muted-foreground) + .text-muted-foreground {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Contour line pattern for cards */
+  .card-contours {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-contours::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 19px,
+        rgba(20, 184, 166, 0.03) 19px,
+        rgba(20, 184, 166, 0.03) 20px
+      );
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* Elevation gradient for progress bars */
+  .elevation-gradient {
+    background: linear-gradient(
+      90deg,
+      #06b6d4 0%,
+      #10b981 25%,
+      #14b8a6 50%,
+      #f59e0b 75%,
+      #ef4444 100%
+    );
+  }
+
+  /* Coordinate-style accent borders */
+  .coordinate-border {
+    position: relative;
+  }
+
+  .coordinate-border::before,
+  .coordinate-border::after {
+    content: '';
+    position: absolute;
+    background: #14b8a6;
+  }
+
+  .coordinate-border::before {
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 1px;
+  }
+
+  .coordinate-border::after {
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 8px;
+  }
+
+  /* Animated grid scan effect */
+  @keyframes grid-scan {
+    0% {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.3;
+    }
+    90% {
+      opacity: 0.3;
+    }
+    100% {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+  }
+
+  .grid-scan {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .grid-scan::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #14b8a6, transparent);
+    animation: grid-scan 8s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* Map legend style controls */
+  .legend-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(20, 184, 166, 0.2);
+    border-radius: 2px;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.025em;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+  }
+
+  .legend-control:hover:not([disabled]) {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(20, 184, 166, 0.4);
+    box-shadow: 0 0 12px rgba(20, 184, 166, 0.15);
+  }
+
+  /* Card fade-in animation */
+  @keyframes card-fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-animate {
+    animation: card-fade-in 0.4s ease-out forwards;
+  }
+
+  /* Staggered animation delays for cards */
+  .card-animate:nth-child(1) { animation-delay: 0s; }
+  .card-animate:nth-child(2) { animation-delay: 0.08s; }
+  .card-animate:nth-child(3) { animation-delay: 0.16s; }
+  .card-animate:nth-child(4) { animation-delay: 0.24s; }
+  .card-animate:nth-child(5) { animation-delay: 0.32s; }
+
+  /* Glowing accent on status icons */
+  @keyframes pulse-glow {
+    0%, 100% {
+      filter: drop-shadow(0 0 4px currentColor);
+    }
+    50% {
+      filter: drop-shadow(0 0 8px currentColor);
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Input focus states with accent glow */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+  }
+
+  /* Monospace number styling */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
   }
 }

@@ -77,13 +77,13 @@ const DEFAULT_PIPELINE_PARAMETERS: PipelineParameters = {
 function getStatusIcon(status: StageStatus) {
   switch (status) {
     case 'success':
-      return <CheckCircle2Icon className="h-4 w-4 text-emerald-500" />
+      return <CheckCircle2Icon className="h-4 w-4 text-accent drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
     case 'running':
-      return <Loader2Icon className="h-4 w-4 animate-spin text-primary" />
+      return <Loader2Icon className="h-4 w-4 animate-spin text-primary drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
     case 'error':
-      return <TriangleAlertIcon className="h-4 w-4 text-destructive" />
+      return <TriangleAlertIcon className="h-4 w-4 text-destructive drop-shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
     default:
-      return <div className="h-2.5 w-2.5 rounded-full bg-muted" />
+      return <div className="h-2.5 w-2.5 rounded-full bg-muted border border-muted-foreground/20" />
   }
 }
 
@@ -543,41 +543,48 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="border-b bg-background/50 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <div className="min-h-screen relative">
+      <header className="border-b border-border/50 bg-card/40 backdrop-blur-xl sticky top-0 z-50 coordinate-border">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
-            <h1 className="text-lg font-semibold">Pacifico Site Layouts</h1>
-            <p className="text-sm text-muted-foreground">
-              Upload a KML/KMZ to generate terrain, constraints, layouts, and road corridors.
+            <h1 className="text-2xl font-bold tracking-wide text-primary flex items-center gap-3">
+              <span className="inline-block w-1 h-6 bg-accent"></span>
+              PACIFICO SITE LAYOUTS
+            </h1>
+            <p className="text-xs text-muted-foreground mt-1 font-mono tracking-wider uppercase">
+              Terrain Analysis • Asset Placement • Road Routing
             </p>
           </div>
-          <Button variant="outline" asChild>
+          <Button variant="outline" className="border-accent/30 hover:border-accent/60 hover:bg-accent/10 transition-all" asChild>
             <a href="/parameters.md" target="_blank" rel="noopener noreferrer">
-              View Default Parameters
+              <span className="font-mono text-xs">PARAMETERS</span>
             </a>
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-6 lg:grid-cols-[360px,1fr]">
+      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[380px,1fr] relative z-10">
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Data Upload</CardTitle>
-              <CardDescription>
-                Provide a property boundary (KML/KMZ). Entry points and exclusions are optional.
+          <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 hover:shadow-accent/10 transition-all duration-300 card-animate">
+            <CardHeader className="border-b border-accent/10">
+              <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                Data Upload
+              </CardTitle>
+              <CardDescription className="font-mono text-xs">
+                Provide property boundary (KML/KMZ) • Entry points optional
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="site-file">KMZ / KML file</Label>
+                <Label htmlFor="site-file" className="text-xs font-mono uppercase tracking-wide text-muted-foreground">KMZ / KML file</Label>
                 <Input
                   id="site-file"
                   type="file"
                   accept=".kmz,.kml"
                   onChange={handleFileChange}
                   disabled={isRunning}
+                  className="cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-accent/20 file:text-accent file:font-mono file:text-xs file:uppercase hover:file:bg-accent/30"
                 />
                 {file ? (
                   <p className="text-xs text-muted-foreground">Selected: {file.name}</p>
@@ -589,38 +596,40 @@ export default function App() {
               </div>
 
               <Button
-                className="w-full"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wider shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
                 onClick={runPipeline}
                 disabled={!file || isRunning}
               >
                 {isRunning ? (
                   <>
-                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> Running pipeline…
+                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    <span className="font-mono text-sm">PROCESSING...</span>
                   </>
                 ) : (
                   <>
-                    <UploadIcon className="mr-2 h-4 w-4" /> Run full pipeline
+                    <UploadIcon className="mr-2 h-4 w-4" />
+                    <span className="font-mono text-sm">RUN PIPELINE</span>
                   </>
                 )}
               </Button>
 
-              <Separator className="my-4" />
+              <Separator className="my-4 bg-accent/20" />
 
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm font-medium">Pipeline parameters</p>
-                  <p className="text-xs text-muted-foreground">
-                    Adjust constraint, layout, and road parameters before running.
+                  <p className="text-sm font-semibold tracking-wide text-accent">Pipeline Parameters</p>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                    Adjust constraints before execution
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={resetParameters} disabled={isRunning}>
-                  Reset
+                <Button variant="ghost" size="sm" onClick={resetParameters} disabled={isRunning} className="hover:bg-accent/10 hover:text-accent font-mono text-xs">
+                  RESET
                 </Button>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="param-max-slope">Max slope for assets (%)</Label>
+                  <Label htmlFor="param-max-slope" className="text-xs font-mono uppercase tracking-wide text-muted-foreground">Max slope for assets (%)</Label>
                   <Input
                     id="param-max-slope"
                     type="number"
@@ -629,10 +638,11 @@ export default function App() {
                     disabled={isRunning}
                     value={pipelineParams.maxSlopePercent}
                     onChange={handleParameterInput('maxSlopePercent')}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="param-setback">Property setback (m)</Label>
+                  <Label htmlFor="param-setback" className="text-xs font-mono uppercase tracking-wide text-muted-foreground">Property setback (m)</Label>
                   <Input
                     id="param-setback"
                     type="number"
@@ -641,10 +651,11 @@ export default function App() {
                     disabled={isRunning}
                     value={pipelineParams.propertySetbackMeters}
                     onChange={handleParameterInput('propertySetbackMeters')}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="param-road-width">Road width (m)</Label>
+                  <Label htmlFor="param-road-width" className="text-xs font-mono uppercase tracking-wide text-muted-foreground">Road width (m)</Label>
                   <Input
                     id="param-road-width"
                     type="number"
@@ -653,10 +664,11 @@ export default function App() {
                     disabled={isRunning}
                     value={pipelineParams.roadWidthMeters}
                     onChange={handleParameterInput('roadWidthMeters')}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="param-road-grade">Road max grade (%)</Label>
+                  <Label htmlFor="param-road-grade" className="text-xs font-mono uppercase tracking-wide text-muted-foreground">Road max grade (%)</Label>
                   <Input
                     id="param-road-grade"
                     type="number"
@@ -665,22 +677,36 @@ export default function App() {
                     disabled={isRunning}
                     value={pipelineParams.roadMaxGradePercent}
                     onChange={handleParameterInput('roadMaxGradePercent')}
+                    className="tabular-nums"
                   />
                 </div>
               </div>
 
-              <Progress value={stageProgress(stageStatuses)} className="h-2" />
+              <div className="relative">
+                <Progress value={stageProgress(stageStatuses)} className="h-3 bg-muted/50 overflow-hidden" />
+                <div
+                  className="absolute top-0 left-0 h-full elevation-gradient transition-all duration-500 ease-out"
+                  style={{ width: `${stageProgress(stageStatuses)}%` }}
+                />
+              </div>
 
               {errorMessage ? (
-                <p className="text-sm font-medium text-destructive">{errorMessage}</p>
+                <div className="p-3 border border-destructive/30 bg-destructive/10 rounded-md">
+                  <p className="text-xs font-mono text-destructive">{errorMessage}</p>
+                </div>
               ) : null}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Pipeline Status</CardTitle>
-              <CardDescription>Each stage runs sequentially; rerun after adjusting inputs.</CardDescription>
+          <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 grid-scan card-animate">
+            <CardHeader className="border-b border-accent/10">
+              <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                Pipeline Status
+              </CardTitle>
+              <CardDescription className="font-mono text-xs">
+                Sequential execution • Rerun individual stages
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -710,15 +736,20 @@ export default function App() {
           </Card>
 
           {results.ingest ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Summary</CardTitle>
-                <CardDescription>Key metrics from the latest run.</CardDescription>
+            <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 card-animate">
+              <CardHeader className="border-b border-accent/10">
+                <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                  Summary
+                </CardTitle>
+                <CardDescription className="font-mono text-xs">
+                  Key metrics • Latest run
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
-                <div>
-                  <p className="font-medium">Run ID</p>
-                  <p className="text-muted-foreground">{results.ingest.runId}</p>
+                <div className="border-l-2 border-primary/50 pl-3 py-1">
+                  <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Run ID</p>
+                  <p className="text-sm font-mono text-foreground mt-1">{results.ingest.runId}</p>
                 </div>
                 <Separator />
                 <div className="grid gap-3">
@@ -766,10 +797,15 @@ export default function App() {
           ) : null}
 
           {results.ingest && runManifest ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Exports</CardTitle>
-                <CardDescription>Download generated artifacts for this run.</CardDescription>
+            <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 card-animate">
+              <CardHeader className="border-b border-accent/10">
+                <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                  Exports
+                </CardTitle>
+                <CardDescription className="font-mono text-xs">
+                  Download artifacts • GeoJSON • PNG masks
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {downloadItems.length > 0 ? (
@@ -793,13 +829,18 @@ export default function App() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <Card className="h-[420px] flex-1">
-            <CardHeader>
-              <CardTitle>Map Preview</CardTitle>
-              <CardDescription>Assets and road corridors appear after their respective stages.</CardDescription>
+          <Card className="h-[520px] flex-1 card-contours border-accent/20 shadow-lg shadow-accent/5 card-animate">
+            <CardHeader className="border-b border-accent/10">
+              <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                Map Preview
+              </CardTitle>
+              <CardDescription className="font-mono text-xs">
+                Geospatial visualization • Real-time updates
+              </CardDescription>
             </CardHeader>
             <CardContent className="h-full">
-              <div className="h-[320px] rounded-md border">
+              <div className="h-[360px] rounded-md border border-accent/20 overflow-hidden shadow-inner">
                 <MapView
                   bbox={mapBbox}
                   assets={assetCollection}
@@ -848,18 +889,24 @@ export default function App() {
                   variant="secondary"
                   onClick={() => setRecenterToken((token) => token + 1)}
                   disabled={!results.ingest}
+                  className="border-accent/30 hover:border-accent/60 bg-secondary/80 hover:bg-accent/20 font-mono text-xs tracking-wider"
                 >
-                  Go to site
+                  GO TO SITE
                 </Button>
               </div>
             </CardContent>
           </Card>
 
           {results.layout ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Placed Assets</CardTitle>
-                <CardDescription>Mean slope evaluated within each pad footprint.</CardDescription>
+            <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 card-animate">
+              <CardHeader className="border-b border-accent/10">
+                <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                  Placed Assets
+                </CardTitle>
+                <CardDescription className="font-mono text-xs">
+                  Slope analysis • Footprint metrics
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -887,10 +934,15 @@ export default function App() {
           ) : null}
 
           {results.roads ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Road Segments</CardTitle>
-                <CardDescription>Segments are routed from the entry point to each placed asset.</CardDescription>
+            <Card className="card-contours border-accent/20 shadow-lg shadow-accent/5 card-animate">
+              <CardHeader className="border-b border-accent/10">
+                <CardTitle className="text-accent flex items-center gap-2 text-sm uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
+                  Road Segments
+                </CardTitle>
+                <CardDescription className="font-mono text-xs">
+                  A* pathfinding • Grade optimization
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -933,9 +985,9 @@ function stageProgress(statuses: Record<PipelineTaskStage, StageStatus>) {
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+    <div className="flex items-center justify-between text-sm border-l-2 border-accent/30 pl-3 py-1 hover:border-accent/60 transition-colors">
+      <span className="text-muted-foreground text-xs uppercase tracking-wide">{label}</span>
+      <span className="font-mono font-semibold text-foreground">{value}</span>
     </div>
   )
 }
@@ -976,11 +1028,11 @@ function OverlayToggle({
   disabled?: boolean
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="legend-control" style={{ opacity: disabled ? 0.5 : 1 }}>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
       <Label
         htmlFor={id}
-        className={`text-sm text-muted-foreground ${disabled ? 'opacity-50' : ''}`}
+        className="text-xs cursor-pointer"
       >
         {label}
       </Label>

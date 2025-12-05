@@ -38,6 +38,6 @@
     "@types/pngjs": "^6.0.5",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^1.6.0"
+    "vitest": "^4.0.12"
   }
 }
